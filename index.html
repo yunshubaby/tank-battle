@@ -218,13 +218,29 @@ class Tank {
     const b = this.getBounds();
     const nx = b.x + dx, ny = b.y + dy;
     const cells = [];
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
+
+    // Only check cells in the new position — tanks already overlapping walls
+    // (e.g. at spawn) should still be able to move away from them
+    const oldRStart = Math.floor(b.y / TILE);
+    const oldREnd = Math.floor((b.y + b.h - 0.01) / TILE);
+    const oldCStart = Math.floor(b.x / TILE);
+    const oldCEnd = Math.floor((b.x + b.w - 0.01) / TILE);
+
+    const newRStart = Math.floor(ny / TILE);
+    const newREnd = Math.floor((ny + b.h - 0.01) / TILE);
+    const newCStart = Math.floor(nx / TILE);
+    const newCEnd = Math.floor((nx + b.w - 0.01) / TILE);
+
+    for (let r = newRStart; r <= newREnd; r++) {
+      for (let c = newCStart; c <= newCEnd; c++) {
+        if (r < 0 || r >= ROWS || c < 0 || c >= COLS) {
+          cells.push({ r, c });
+          continue;
+        }
+        // Skip cells the tank already occupied before moving
+        if (r >= oldRStart && r <= oldREnd && c >= oldCStart && c <= oldCEnd) continue;
         if (map[r][c] > 0) {
-          const cx = c * TILE, cy = r * TILE;
-          if (nx < cx + TILE && nx + b.w > cx && ny < cy + TILE && ny + b.h > cy) {
-            cells.push({ r, c });
-          }
+          cells.push({ r, c });
         }
       }
     }
@@ -350,8 +366,22 @@ let player;
 let enemies = [];
 let particles = [];
 
+function clearSpawnArea(centerX, centerY) {
+  const col = Math.floor(centerX / TILE);
+  const row = Math.floor(centerY / TILE);
+  for (let r = row - 1; r <= row + 1; r++) {
+    for (let c = col - 1; c <= col + 1; c++) {
+      if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+        map[r][c] = 0;
+      }
+    }
+  }
+}
+
 function spawnPlayer() {
-  player = new PlayerTank(W/2 - TILE, H - TILE*2, 0, '#4a4', true);
+  const sx = W/2, sy = H - TILE * 2;
+  clearSpawnArea(sx, sy);
+  player = new PlayerTank(sx, sy, 0, '#4a4', true);
 }
 
 class PlayerTank extends Tank {
@@ -444,9 +474,11 @@ class EnemyTank extends Tank {
 
 function spawnEnemy() {
   const spawns = [
-    [TILE*2, TILE*2], [W/2, TILE*2], [W - TILE*2, TILE*2]
+    [TILE*3, TILE*2], [W/2, TILE*2], [W - TILE*3, TILE*2]
   ];
   const pos = spawns[Math.floor(Math.random() * spawns.length)];
+  // Clear spawn area to avoid spawning inside walls
+  clearSpawnArea(pos[0], pos[1]);
   // Check no overlap
   const temp = new Tank(pos[0], pos[1], 0, '#c44', false);
   let blocked = false;
